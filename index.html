@@ -1,0 +1,1234 @@
+<!DOCTYPE html>
+<html lang="th" class="h-full bg-slate-950 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>เครื่องจำลอง PLC และ HMI ระบบผสมสารเคมี CAPTAIN (ถัง 5T-1)</title>
+    <!-- Tailwind CSS for Premium Dark UI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @keyframes spin-slow {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .spinning {
+            animation: spin-slow 2s linear infinite;
+        }
+        .spinning-fast {
+            animation: spin-slow 0.6s linear infinite;
+        }
+        .flow-line {
+            stroke-dasharray: 12;
+            animation: flow 0.6s linear infinite;
+        }
+        @keyframes flow {
+            to { stroke-dashoffset: -24; }
+        }
+        /* Custom scrollbar for terminal/logs */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+    </style>
+</head>
+<!-- ปรับ body ให้รองรับ Mobile Scroll -->
+<body class="h-[100dvh] flex flex-col font-sans overflow-hidden">
+
+    <!-- Top Bar -->
+    <header class="bg-slate-900 border-b border-slate-800 px-4 lg:px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="p-2.5 bg-blue-600/20 text-blue-400 rounded-lg border border-blue-500/30">
+                <i data-lucide="cpu" class="w-6 h-6"></i>
+            </div>
+            <div>
+                <h1 class="text-base sm:text-lg font-bold tracking-wide text-white">PLC & HMI SIMULATOR</h1>
+                <p class="text-[10px] sm:text-xs text-slate-400">ระบบควบคุมการผลิตสูตรผสมเคมีอัตโนมัติ • ถังผสมหลัก 5T-1</p>
+            </div>
+        </div>
+        
+        <!-- Top Status Indicators -->
+        <div class="flex items-center gap-3 sm:gap-6 self-end sm:self-auto">
+            <div class="flex items-center gap-2 bg-slate-950 px-2 sm:px-3 py-1.5 rounded-md border border-slate-800">
+                <span class="relative flex h-2.5 w-2.5 sm:h-3 sm:w-3">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 sm:h-3 sm:w-3 bg-emerald-500"></span>
+                </span>
+                <span class="text-[10px] sm:text-xs font-mono text-slate-300">PLC CPU: RUNNING</span>
+            </div>
+            <div class="flex items-center gap-2 bg-slate-950 px-2 sm:px-3 py-1.5 rounded-md border border-slate-800">
+                <i data-lucide="clock" class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400"></i>
+                <span id="system-time" class="text-[10px] sm:text-xs font-mono text-slate-300">12:00:00 AM</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Body (Scrollable on Mobile, Hidden overflow on Desktop) -->
+    <main class="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
+        
+        <!-- Left Column: SCADA & Tank Visualization -->
+        <section class="w-full lg:w-[45%] lg:border-r border-slate-800 p-4 lg:p-6 flex flex-col gap-4 lg:gap-6 overflow-visible lg:overflow-y-auto bg-slate-900/40 shrink-0">
+            <div class="flex justify-between items-center">
+                <h2 class="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                    <i data-lucide="activity" class="w-4 h-4 text-emerald-400"></i> SCADA MONITORING (ถัง 5T-1)
+                </h2>
+                <!-- Flow Rate Indicator -->
+                <div class="text-right text-[10px] sm:text-xs">
+                    <span class="text-slate-400">Flow Rate:</span>
+                    <span id="flow-rate" class="font-mono text-cyan-400 font-bold ml-1">0.00 kg/s</span>
+                </div>
+            </div>
+
+            <!-- Tank Graphical Simulation Area (AUTO-SCALING WRAPPER) -->
+            <div id="scada-container" class="relative w-full min-h-[320px] sm:min-h-[380px] bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-center p-2 overflow-hidden shadow-inner">
+                
+                <!-- SCADA DIAGRAM (This div will scale via JavaScript) -->
+                <div id="scada-diagram" class="relative flex items-center justify-center origin-center transition-transform duration-200">
+                    
+                    <!-- CENTRAL TANK WRAPPER (Keeps all pipes and labels perfectly aligned together) -->
+                    <div class="relative w-[180px] h-[260px] ml-[150px] mr-[180px] shrink-0">
+                        
+                        <!-- LEFT INLET MANIFOLD (Labels) -->
+                        <div class="absolute right-[calc(100%+16px)] top-4 flex flex-col gap-[12px] w-[140px] z-30">
+                            <!-- V2 (Caustic) -->
+                            <div class="flex items-center gap-2 bg-slate-900/95 px-2 h-[30px] rounded border border-slate-700 shadow-md">
+                                <span id="ind-caustic" class="w-3 h-3 rounded-full bg-slate-800 border border-slate-700 shrink-0"></span>
+                                <span class="text-[10px] text-purple-400 font-bold truncate">V2 (Caustic)</span>
+                            </div>
+                            <!-- V3 (LAS) -->
+                            <div class="flex items-center gap-2 bg-slate-900/95 px-2 h-[30px] rounded border border-slate-700 shadow-md">
+                                <span id="ind-las" class="w-3 h-3 rounded-full bg-slate-800 border border-slate-700 shrink-0"></span>
+                                <span class="text-[10px] text-yellow-400 font-bold truncate">V3 (LAS)</span>
+                            </div>
+                            <!-- V4 (LIQUID 20) -->
+                            <div class="flex items-center gap-2 bg-slate-900/95 px-2 h-[30px] rounded border border-slate-700 shadow-md">
+                                <span id="ind-liquid20" class="w-3 h-3 rounded-full bg-slate-800 border border-slate-700 shrink-0"></span>
+                                <span class="text-[10px] text-pink-400 font-bold truncate">V4 (LIQUID 20)</span>
+                            </div>
+                            <!-- V5 (Skybio) -->
+                            <div class="flex items-center gap-2 bg-slate-900/95 px-2 h-[30px] rounded border border-slate-700 shadow-md">
+                                <span id="ind-skybio" class="w-3 h-3 rounded-full bg-slate-800 border border-slate-700 shrink-0"></span>
+                                <span class="text-[10px] text-emerald-400 font-bold truncate">V5 (Skybio)</span>
+                            </div>
+                            <!-- V1 (RO Water) -->
+                            <div class="flex items-center gap-2 bg-slate-900/95 px-2 h-[30px] rounded border border-slate-700 shadow-md">
+                                <span id="ind-water" class="w-3 h-3 rounded-full bg-slate-800 border border-slate-700 shrink-0"></span>
+                                <span class="text-[10px] text-cyan-400 font-bold truncate">V1 (RO Water)</span>
+                            </div>
+                        </div>
+
+                        <!-- LEFT INLET MANIFOLD (SVG Pipes) -->
+                        <svg class="absolute top-0 right-[100%] w-[160px] h-[260px] overflow-visible pointer-events-none z-20">
+                            <!-- Background Static Pipes -->
+                            <path d="M 155 199 L 155 10 L 180 10 L 180 40" fill="none" stroke="#334155" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"/>
+                            <path d="M 144 31 L 155 31" fill="none" stroke="#334155" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"/>
+                            <path d="M 144 73 L 155 73" fill="none" stroke="#334155" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"/>
+                            <path d="M 144 115 L 155 115" fill="none" stroke="#334155" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"/>
+                            <path d="M 144 157 L 155 157" fill="none" stroke="#334155" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"/>
+                            <path d="M 144 199 L 155 199" fill="none" stroke="#334155" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"/>
+
+                            <!-- Animated Flow Lines -->
+                            <path id="flow-caustic" d="M 144 31 L 155 31 L 155 10 L 180 10 L 180 40" fill="none" stroke="#a855f7" stroke-width="4" stroke-linejoin="round" class="flow-line hidden" />
+                            <path id="flow-las" d="M 144 73 L 155 73 L 155 10 L 180 10 L 180 40" fill="none" stroke="#eab308" stroke-width="4" stroke-linejoin="round" class="flow-line hidden" />
+                            <path id="flow-liquid20" d="M 144 115 L 155 115 L 155 10 L 180 10 L 180 40" fill="none" stroke="#ec4899" stroke-width="4" stroke-linejoin="round" class="flow-line hidden" />
+                            <path id="flow-skybio" d="M 144 157 L 155 157 L 155 10 L 180 10 L 180 40" fill="none" stroke="#10b981" stroke-width="4" stroke-linejoin="round" class="flow-line hidden" />
+                            <path id="flow-water" d="M 144 199 L 155 199 L 155 10 L 180 10 L 180 40" fill="none" stroke="#0ea5e9" stroke-width="4" stroke-linejoin="round" class="flow-line hidden" />
+                        </svg>
+
+                        <!-- Circulation Pipe (Right Side) -->
+                        <svg class="absolute top-[30px] left-[100%] w-[65px] h-[190px] overflow-visible pointer-events-none z-0">
+                            <!-- Pipe Background (Thick 3D Effect) -->
+                            <path d="M 0 190 L 65 190 L 65 0 L 0 0" fill="none" stroke="#475569" stroke-width="14" stroke-linejoin="round"/>
+                            <!-- Pipe Inner shadow/core -->
+                            <path d="M 0 190 L 65 190 L 65 0 L 0 0" fill="none" stroke="#0f172a" stroke-width="6" stroke-linejoin="round"/>
+                            
+                            <!-- Flow lines with Glow -->
+                            <path id="circ-flow-glow" d="M 0 190 L 65 190 L 65 0 L 0 0" fill="none" stroke="#10b981" stroke-width="10" stroke-linejoin="round" class="hidden opacity-50 blur-sm transition-opacity duration-300" />
+                            <path id="circ-flow" d="M 0 190 L 65 190 L 65 0 L 0 0" fill="none" stroke="#34d399" stroke-width="6" stroke-linejoin="round" class="flow-line hidden" />
+                        </svg>
+
+                        <!-- Right Circulation Pump Label -->
+                        <div class="absolute bottom-[25px] left-[calc(100%+75px)] flex flex-col gap-2 text-[11px] font-mono text-left z-20 w-[110px]">
+                            <div class="flex items-center gap-2 bg-slate-900/95 px-3 py-2 rounded-lg border border-slate-700 shadow-lg">
+                                <span id="pump-circ-indicator" class="w-4 h-4 rounded-full bg-slate-800 border-2 border-slate-600 shrink-0"></span>
+                                <span class="text-emerald-400 font-bold">ปั๊มหมุนเวียน</span>
+                            </div>
+                        </div>
+
+                        <!-- The Mixing Tank Graphic (Main Body) -->
+                        <div class="absolute inset-0 border-x-4 border-b-4 border-slate-500 rounded-b-3xl flex flex-col justify-end overflow-hidden bg-slate-900/70 z-10 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)]">
+                            
+                            <!-- Grid Lines / Measuring Scale inside tank -->
+                            <div class="absolute inset-x-0 top-0 h-full flex flex-col justify-between pointer-events-none text-[9px] font-mono text-slate-500 px-2 py-4 z-20">
+                                <div class="border-t border-slate-800 flex justify-between w-full"><span>100%</span><span id="scale-100">5000 kg</span></div>
+                                <div class="border-t border-slate-800 flex justify-between w-full"><span>80%</span><span id="scale-80">4000 kg</span></div>
+                                <div class="border-t border-slate-800 flex justify-between w-full"><span>60%</span><span id="scale-60">3000 kg</span></div>
+                                <div class="border-t border-slate-800 flex justify-between w-full"><span>40%</span><span id="scale-40">2000 kg</span></div>
+                                <div class="border-t border-slate-800 flex justify-between w-full"><span>20%</span><span id="scale-20">1000 kg</span></div>
+                                <div></div>
+                            </div>
+
+                            <!-- Liquid Container (Rises dynamically) -->
+                            <div id="tank-liquid" class="w-full bg-gradient-to-t from-cyan-600/60 to-sky-400/50 transition-all duration-300 relative border-t-2 border-sky-300 z-0" style="height: 0%;">
+                                <!-- Floating bubbles/particles during mixing -->
+                                <div id="agitator-particles" class="absolute inset-0 opacity-40 overflow-hidden pointer-events-none hidden">
+                                    <span class="absolute w-2 h-2 bg-white rounded-full animate-bounce left-4 bottom-10"></span>
+                                    <span class="absolute w-1.5 h-1.5 bg-cyan-200 rounded-full animate-bounce left-16 bottom-24 delay-100"></span>
+                                    <span class="absolute w-3 h-3 bg-white rounded-full animate-bounce left-24 bottom-6 delay-300"></span>
+                                    <span class="absolute w-2 h-2 bg-purple-200 rounded-full animate-bounce left-32 bottom-16 delay-200"></span>
+                                </div>
+                            </div>
+
+                            <!-- Agitator (ใบกวน) in Center -->
+                            <div class="absolute inset-x-0 top-0 bottom-4 flex flex-col items-center justify-end pointer-events-none z-10">
+                                <!-- Shaft -->
+                                <div class="w-1.5 bg-gradient-to-r from-slate-400 to-slate-200 h-[150px] shadow"></div>
+                                <!-- Propeller -->
+                                <div id="tank-propeller" class="w-24 h-5 bg-gradient-to-r from-slate-400 via-slate-100 to-slate-400 rounded-full flex items-center justify-between px-1 shadow border border-slate-500">
+                                    <span class="w-2.5 h-2.5 bg-slate-600 rounded-full"></span>
+                                    <span class="w-2.5 h-2.5 bg-slate-600 rounded-full"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Batch Status Overlay (Outside tank) -->
+            <div class="bg-slate-950 border border-slate-800 p-4 rounded-xl flex justify-between items-center shadow-md">
+                <div>
+                    <div class="text-[10px] text-slate-400">น้ำหนักรวมปัจจุบัน (Total Weight)</div>
+                    <div class="text-lg sm:text-xl font-mono font-bold text-emerald-400"><span id="tank-weight">0.00</span> / <span id="target-weight-display">5,000</span> kg</div>
+                </div>
+                <div class="text-right">
+                    <div class="text-[10px] text-slate-400">ระดับถัง (Level)</div>
+                    <div id="tank-level-percent" class="text-base sm:text-lg font-mono font-bold text-cyan-400">0%</div>
+                </div>
+            </div>
+
+            <!-- Parameters Dashboard Grid (Responsive layout) -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:gap-4">
+                <div class="bg-slate-950 p-3.5 rounded-lg border border-slate-800">
+                    <div class="text-xs text-slate-400 mb-1 flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-cyan-500 shrink-0"></span> ปริมาณน้ำ RO หลัก
+                    </div>
+                    <div class="text-base sm:text-lg font-mono font-bold" id="ro-main-display">3,995.00 kg</div>
+                </div>
+                <div class="bg-slate-950 p-3.5 rounded-lg border border-slate-800">
+                    <div class="text-xs text-slate-400 mb-1 flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span> น้ำล้างท่อทั้งหมด
+                    </div>
+                    <div class="text-base sm:text-lg font-mono font-bold" id="wash-water-display">100.00 kg</div>
+                </div>
+            </div>
+
+            <!-- Dynamic Chemical Formula Breakdown -->
+            <div class="bg-slate-950 p-4 rounded-lg border border-slate-800 shrink-0">
+                <div class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
+                    <i data-lucide="scale" class="w-4 h-4 text-purple-400"></i> สัดส่วนและปริมาณวัตถุดิบตามสูตร
+                </div>
+                <div class="space-y-2.5 text-xs font-mono">
+                    <div class="flex justify-between items-center py-1 border-b border-slate-900">
+                        <span class="text-slate-300">1. Caustic Soda 50% (1.50%)</span>
+                        <span class="text-white font-bold" id="calc-caustic">75.00 kg</span>
+                    </div>
+                    <div class="flex justify-between items-center py-1 border-b border-slate-900">
+                        <span class="text-slate-300">2. LAS (5.85%)</span>
+                        <span class="text-white font-bold" id="calc-las">292.50 kg</span>
+                    </div>
+                    <div class="flex justify-between items-center py-1 border-b border-slate-900">
+                        <span class="text-slate-300">3. LIQUID 20 (80-026) (8.50%)</span>
+                        <span class="text-white font-bold" id="calc-liquid">425.00 kg</span>
+                    </div>
+                    <div class="flex justify-between items-center py-1 border-b border-slate-900">
+                        <span class="text-slate-300">4. REFINED SALT (1.85%)</span>
+                        <span class="text-white font-bold" id="calc-salt">92.50 kg</span>
+                    </div>
+                    <div class="flex justify-between items-center py-1">
+                        <span class="text-slate-300">5. SKYBIO PG520 (0.40%)</span>
+                        <span class="text-white font-bold" id="calc-skybio">20.00 kg</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Right Column: HMI Control Board & Live Terminal Logs -->
+        <!-- Overflow visible on mobile to allow natural page scroll -->
+        <section class="w-full lg:flex-1 flex flex-col p-4 lg:p-6 overflow-visible lg:overflow-hidden gap-4 lg:gap-6 bg-slate-950 shrink-0">
+            
+            <!-- Dynamic HMI Panel Controls Header -->
+            <div class="flex justify-between items-center flex-wrap gap-4">
+                <h2 class="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                    <i data-lucide="sliders" class="w-4 h-4 text-blue-400"></i> HMI CONTROL PANEL
+                </h2>
+                <!-- Recipe/Batch Size Setup Selector -->
+                <div class="flex items-center gap-2 bg-slate-900 p-1.5 rounded-lg border border-slate-800" id="batch-selector-container">
+                    <label class="text-xs text-slate-400 px-2 flex items-center gap-1">
+                        <i data-lucide="lock" class="w-3.5 h-3.5 text-amber-500 hidden" id="selector-lock-icon"></i>
+                        <span class="hidden sm:inline">ยอดผลิต:</span>
+                    </label>
+                    <select id="batch-selector" class="bg-slate-950 text-xs font-mono font-bold text-cyan-400 outline-none border border-slate-800 px-2 sm:px-2.5 py-1 rounded cursor-pointer hover:border-slate-700 disabled:opacity-60 disabled:cursor-not-allowed">
+                        <option value="1000">1,000 kg</option>
+                        <option value="3000">3,000 kg</option>
+                        <option value="5000" selected>5,000 kg</option>
+                        <option value="10000">10,000 kg</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Active PLC Step Monitor (Big Status Badge) -->
+            <div id="step-badge-container" class="bg-slate-900/60 rounded-xl p-4 sm:p-5 border border-slate-800 relative overflow-hidden transition-all duration-300">
+                <div class="absolute top-0 left-0 w-2.5 h-full bg-slate-600 transition-colors duration-300" id="step-bar"></div>
+                <div class="flex justify-between items-start pl-4 gap-2">
+                    <div class="flex-1">
+                        <div class="text-[9px] sm:text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1.5" id="step-id-text">
+                            PLC REGISTER STATE: STANDBY
+                        </div>
+                        <h3 class="text-lg sm:text-xl font-bold text-white mt-1" id="step-name-text">
+                            ระบบพร้อมเริ่มเดินโปรแกรมผลิต
+                        </h3>
+                        <p class="text-[10px] sm:text-xs text-slate-400 mt-1" id="step-description-text">
+                            กรุณาตรวจสอบระบบ วัตถุดิบ และความปลอดภัย จากนั้นกดปุ่ม START เพื่อเริ่มต้นการทำงาน
+                        </p>
+                    </div>
+                    <!-- Countdown / Timer box -->
+                    <div class="text-right shrink-0">
+                        <span class="text-[9px] sm:text-[10px] text-slate-400 block uppercase tracking-widest">Step Time</span>
+                        <span id="step-timer" class="text-xl sm:text-2xl font-mono font-bold text-white block mt-1">00:00</span>
+                    </div>
+                </div>
+
+                <!-- Step Progress bar inside card -->
+                <div class="mt-4 pl-4">
+                    <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden">
+                        <div id="step-progress" class="bg-cyan-500 h-full w-0 transition-all duration-300"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Operational Control Action Panel -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                <!-- Core PLC Command Buttons -->
+                <div class="bg-slate-900/40 p-4 rounded-xl border border-slate-800 flex flex-col gap-3">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">ระบบสั่งงานระบบควบคุม (PLC Controls)</h4>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button id="btn-start" class="flex flex-col items-center justify-center py-2.5 sm:py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold rounded-lg gap-1.5 border border-emerald-500/30 transition-all">
+                            <i data-lucide="play" class="w-4 h-4 sm:w-5 sm:h-5"></i>
+                            <span class="text-[10px] sm:text-xs">START</span>
+                        </button>
+                        <button id="btn-pause" disabled class="flex flex-col items-center justify-center py-2.5 sm:py-3 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-400 hover:text-white font-bold rounded-lg gap-1.5 border border-slate-700 transition-all disabled:opacity-40 disabled:pointer-events-none">
+                            <i data-lucide="pause" class="w-4 h-4 sm:w-5 sm:h-5"></i>
+                            <span class="text-[10px] sm:text-xs">PAUSE</span>
+                        </button>
+                        <button id="btn-reset" class="flex flex-col items-center justify-center py-2.5 sm:py-3 bg-slate-900 hover:bg-slate-800 active:scale-95 text-slate-400 hover:text-white font-bold rounded-lg gap-1.5 border border-slate-800 transition-all">
+                            <i data-lucide="rotate-ccw" class="w-4 h-4 sm:w-5 sm:h-5"></i>
+                            <span class="text-[10px] sm:text-xs">RESET</span>
+                        </button>
+                    </div>
+
+                    <!-- Speed simulation controls -->
+                    <div class="mt-2 flex items-center justify-between text-[10px] sm:text-xs bg-slate-950 p-2 sm:p-2.5 rounded-lg border border-slate-800">
+                        <span class="text-slate-400">ความเร็วจลน์จำลอง:</span>
+                        <div class="flex gap-1" id="speed-controls">
+                            <button data-speed="1" class="px-2 py-1 rounded font-mono font-bold bg-slate-800 text-slate-300 hover:bg-slate-700">1x</button>
+                            <button data-speed="5" class="px-2 py-1 rounded font-mono font-bold bg-slate-800 text-slate-300 hover:bg-slate-700">5x</button>
+                            <button data-speed="20" class="px-2 py-1 rounded font-mono font-bold bg-cyan-600 text-white">20x</button>
+                            <button data-speed="100" class="px-2 py-1 rounded font-mono font-bold bg-slate-800 text-slate-300 hover:bg-slate-700">100x</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Operator Manual Interlock & Confirmation Panel -->
+                <div class="bg-slate-900/40 p-4 rounded-xl border border-slate-800 flex flex-col gap-3 justify-between">
+                    <div>
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                            <span class="relative flex h-2 w-2 shrink-0">
+                                <span id="manual-ping" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75 hidden"></span>
+                                <span id="manual-dot" class="relative inline-flex rounded-full h-2 w-2 bg-slate-500"></span>
+                            </span>
+                            ยืนยันขั้นตอนแบบแมนนวล
+                        </h4>
+                        <!-- Dynamic Instructions for HMI interaction -->
+                        <p id="hmi-action-prompt" class="text-[10px] sm:text-xs text-slate-400 mt-2 italic leading-relaxed">
+                            ไม่มีขั้นตอนที่ต้องสแตนด์บายจากผู้ปฏิบัติงานในขณะนี้...
+                        </p>
+                    </div>
+
+                    <!-- Confirm Action Buttons -->
+                    <div id="hmi-action-inputs" class="flex flex-col sm:flex-row gap-2 hidden">
+                        <!-- Content injected via JS based on Step (e.g., Input actual pH, Confirm salt) -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Diagnostic Terminal Logs (PLC Code execution console) -->
+            <!-- Min-height set to preserve space on mobile before desktop takes over -->
+            <div class="w-full lg:flex-1 flex flex-col bg-slate-950 border border-slate-800 rounded-xl overflow-hidden min-h-[220px] lg:min-h-0 shrink-0">
+                <!-- Panel Header -->
+                <div class="bg-slate-900 px-3 sm:px-4 py-2 flex justify-between items-center border-b border-slate-800">
+                    <span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                        <i data-lucide="terminal" class="w-3.5 h-3.5 text-cyan-400"></i> บันทึกสัญญาณควบคุม (PLC CPU Log)
+                    </span>
+                    <button id="btn-clear-terminal" class="text-[9px] sm:text-[10px] text-slate-500 hover:text-slate-300 flex items-center gap-1">
+                        <i data-lucide="trash-2" class="w-3 h-3"></i> ล้างประวัติ
+                    </button>
+                </div>
+                <!-- Live Terminal Body -->
+                <div id="plc-terminal" class="flex-1 p-3 sm:p-4 font-mono text-[10px] sm:text-[11px] overflow-y-auto space-y-1.5 bg-black/40">
+                    <div class="text-slate-500">// PLC Simulator initialized. CPU ready.</div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer Security Information Bar -->
+    <footer class="bg-slate-900 border-t border-slate-800 px-4 lg:px-6 py-2.5 flex justify-between items-center text-[9px] sm:text-xs text-slate-400 shrink-0">
+        <span class="flex items-center gap-1.5 truncate">
+            <i data-lucide="shield-check" class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500 shrink-0"></i>
+            <span class="truncate">พนักงานต้องสวมใส่ชุด PPE ครบถ้วน (หมวก, แว่นตา, ถุงมือ, รองเท้าหัวเหล็ก)</span>
+        </span>
+        <span class="font-mono text-slate-500 hidden sm:inline">APP-ID: captain-batcher-v2.0</span>
+    </footer>
+
+    <!-- Logic Controller Simulation Script -->
+    <script>
+        // ----------------------------------------------------
+        // PLC STATE DICTIONARY & RECIPE DEFINITION
+        // ----------------------------------------------------
+        const STEPS = {
+            ST_00: { code: 'ST_00', name: 'Standby / Ready', desc: 'ระบบทำงานเรียบร้อยและกำลังรอคำสั่งเริ่มทำงานจากพนักงานควบคุมเครื่อง', type: 'idle' },
+            ST_01: { code: 'ST_01', name: 'เติมน้ำ RO หลัก', desc: 'ระบบเปิดวาล์ว V1 สั่งจ่ายน้ำ RO เข้าถัง โดยคำนวณหักลบน้ำล้างท่อแล้ว', type: 'feed_water' },
+            ST_02: { code: 'ST_02', name: 'เปิดใบกวน', desc: 'สตาร์ทใบกวนหลักถัง 5T-1 ความเร็วรอบปกติ เพื่อเตรียมรับสารสลายเคมีชุดแรก', type: 'agitator_start' },
+            ST_03: { code: 'ST_03', name: 'เติม Caustic Soda 50%', desc: 'เปิดวาล์ว V2 และปั๊มสูบจ่ายสาร Caustic Soda 50% เข้าถังผสม', type: 'feed_chem', ingredient: 'caustic' },
+            ST_04: { code: 'ST_04', name: 'RO ล้างท่อ รอบที่ 1', desc: 'เปิดน้ำ RO ฉีดล้างสารละลายตกค้างในท่อเคมี เพื่อรักษาความบริสุทธิ์ของผลิตภัณฑ์', type: 'wash' },
+            ST_05: { code: 'ST_05', name: 'กวนผสม Caustic', desc: 'ควบคุมใบกวนทำการกวนเคมี Caustic ให้แตกตัวในน้ำอย่างสมบูรณ์', type: 'mix', duration: 600 }, // 10 mins (600s)
+            ST_06: { code: 'ST_06', name: 'เติม LAS', desc: 'เปิดวาล์วและปั๊มสาร LAS ทำงานเพื่อปล่อยปริมาณตามสูตรเข้าถังผสมหลัก', type: 'feed_chem', ingredient: 'las' },
+            ST_07: { code: 'ST_07', name: 'RO ล้างท่อ รอบที่ 2', desc: 'เปิดวาล์วพรมล้างคราบเคมีเหนียวหนืดของ LAS ในระบบท่อขนส่ง', type: 'wash' },
+            ST_08: { code: 'ST_08', name: 'กวนผสม LAS + Circulate', desc: 'กวนระบบต่อเนื่องพร้อมคุมรอบปั๊มหมุนเวียน (Circulate Pump P1) ทำงานทุกๆ 10 นาที', type: 'mix_circulate', duration: 3600 }, // 60 mins (3600s)
+            ST_09: { code: 'ST_09', name: 'ตรวจวัด & ปรับ pH ครั้งที่ 1', desc: 'ขั้นตอนแมนนวล: พนักงานช้อนสารวัด pH และระบุปรับค่าให้ลงตัวที่ 7.00', type: 'manual_ph_1' },
+            ST_10: { code: 'ST_10', name: 'เติม LIQUID 20 (80-026)', desc: 'ควบคุมปั๊มเคมีจ่ายสาร LIQUID 20 หรือรหัส (80-026) เข้าสู่ระบบถัง', type: 'feed_chem', ingredient: 'liquid_20' },
+            ST_11: { code: 'ST_11', name: 'RO ล้างท่อ รอบที่ 3', desc: 'ระบบล้างท่อเคมีเพื่อปัดเป่าละออง LIQUID 20 ที่ติดท่อด้านข้าง', type: 'wash' },
+            ST_12: { code: 'ST_12', name: 'กวนผสม LIQUID 20', desc: 'ปั่นกวนเนื้อสารระบบเพื่อกระจายโมเลกุล LIQUID 20 อย่างต่อเนื่อง', type: 'mix', duration: 1800 }, // 30 mins (1800s)
+            ST_13: { code: 'ST_13', name: 'เติมเกลือละลายน้ำ', desc: 'ขั้นตอนแมนนวล: พนักงานละลายเกลือภายนอกให้หมด แล้วเทป้อนเข้าถัง ก่อนกดยืนยัน', type: 'manual_salt' },
+            ST_14: { code: 'ST_14', name: 'RO ล้างท่อ รอบที่ 4', desc: 'เปิดสเปรย์น้ำล้างทางน้ำเกลือเพื่อให้น้ำเหลวเกลือไหลชะล้างลงถังจนสะอาด', type: 'wash' },
+            ST_15: { code: 'ST_15', name: 'เติม Skybio (สารกันเสีย)', desc: 'ระบบเปิดปั๊มวาล์วสำหรับเติมสารกันเสีย Skybio หรือกลุ่มเคมีทดแทน', type: 'feed_chem', ingredient: 'skybio' },
+            ST_16: { code: 'ST_16', name: 'RO ล้างท่อ รอบสุดท้าย', desc: 'เปิดสเปรย์น้ำล้างท่อครั้งสุดท้าย ดึงโควตาน้ำล้างสะสมก้อนสุดท้ายเข้าถึงระบบถัง', type: 'wash_final' },
+            ST_17: { code: 'ST_17', name: 'Circulation หลังใส่สารครบ', desc: 'เดินมอเตอร์ผสมสารเคมี พร้อมระบบปั๊มเวียนวนรอบถังหลักให้เข้าเนื้อรวดเร็ว', type: 'circulate_final', duration: 600 }, // 10 mins (600s)
+            ST_18: { code: 'ST_18', name: 'ปิดใบกวน', desc: 'ส่งสัญญาณสั่งปิด Agitator และปั๊มทุกส่วน เพื่อเตรียมเข้าสู่ช่วงพักเนื้อสาร', type: 'agitator_stop' },
+            ST_19: { code: 'ST_19', name: 'รอผสม / สารเซ็ตตัว', desc: 'สารเคมีกำลังปรับสมดุลโมเลกุลและพักตัวในถังผสมหลักอย่างเงียบสงบ', type: 'mix_resting', duration: 3600 }, // 60 mins (3600s)
+            ST_20: { code: 'ST_20', name: 'ตรวจวัด pH ครั้งที่ 2 & QC', desc: 'เก็บตัวอย่างตรวจสอบขั้นสุดท้ายและปรับสมดุล pH หากสั่นคลอน', type: 'manual_ph_2' },
+            ST_21: { code: 'ST_21', name: 'จบกระบวนการผลิต', desc: 'โปรแกรมชุดผลิต CAPTAIN สมบูรณ์ เปิดปั๊มปล่อยน้ำยาส่งเข้าคลังบรรจุเสร็จสิ้น!', type: 'complete' }
+        };
+
+        // Standard %w/w formulas (Based on 100%)
+        const FORMULA_RATIOS = {
+            caustic: 0.0150,     // 1.50%
+            las: 0.0585,         // 5.85%
+            liquid_20: 0.0850,   // 8.50%
+            salt: 0.0185,        // 1.85%
+            skybio: 0.0040,      // 0.40%
+            water_total: 0.8190  // 81.90%
+        };
+
+        // ----------------------------------------------------
+        // SYSTEM VARIABLES & STATES
+        // ----------------------------------------------------
+        let currentStep = 'ST_00';
+        let isRunning = false;
+        let isPaused = false;
+        let batchSize = 5000; // default 5 tons
+        
+        let targetWeights = {};
+        let currentWeight = 0;
+        let currentLevel = 0;
+        let elapsedSeconds = 0;
+        let totalElapsedSeconds = 0;
+        let simulationSpeed = 20; // 20 seconds simulation per 1 real second
+
+        let waterWashAllocation = 100; // Standard 100kg allocation of wash water
+        let waterInjectedForWash = 0; 
+
+        // Active State variables for simulation running
+        let flowRate = 0; 
+        let systemLoopInterval = null;
+
+        // Internal process logs
+        let calculatedPH_1 = 6.2; // simulation starts as acid/alkaline
+        let finalPHChecked = false;
+
+        // ----------------------------------------------------
+        // DOM ELEMENTS SELECTION
+        // ----------------------------------------------------
+        const elSystemTime = document.getElementById('system-time');
+        const elBatchSelector = document.getElementById('batch-selector');
+        const elSelectorLockIcon = document.getElementById('selector-lock-icon');
+        const elFlowRate = document.getElementById('flow-rate');
+        
+        const elTankLiquid = document.getElementById('tank-liquid');
+        const elTankPropeller = document.getElementById('tank-propeller');
+        const elAgitatorParticles = document.getElementById('agitator-particles');
+        const elTankWeight = document.getElementById('tank-weight');
+        const elTargetWeightDisplay = document.getElementById('target-weight-display');
+        const elTankLevelPercent = document.getElementById('tank-level-percent');
+
+        // Dynamic scale elements
+        const elScale100 = document.getElementById('scale-100');
+        const elScale80 = document.getElementById('scale-80');
+        const elScale60 = document.getElementById('scale-60');
+        const elScale40 = document.getElementById('scale-40');
+        const elScale20 = document.getElementById('scale-20');
+        
+        const elRoMainDisplay = document.getElementById('ro-main-display');
+        const elWashWaterDisplay = document.getElementById('wash-water-display');
+        const elCalcCaustic = document.getElementById('calc-caustic');
+        const elCalcLas = document.getElementById('calc-las');
+        const elCalcLiquid = document.getElementById('calc-liquid');
+        const elCalcSalt = document.getElementById('calc-salt');
+        const elCalcSkybio = document.getElementById('calc-skybio');
+        
+        const elStepBadgeContainer = document.getElementById('step-badge-container');
+        const elStepBar = document.getElementById('step-bar');
+        const elStepIdText = document.getElementById('step-id-text');
+        const elStepNameText = document.getElementById('step-name-text');
+        const elStepDescriptionText = document.getElementById('step-description-text');
+        const elStepTimer = document.getElementById('step-timer');
+        const elStepProgress = document.getElementById('step-progress');
+        
+        const elBtnStart = document.getElementById('btn-start');
+        const elBtnPause = document.getElementById('btn-pause');
+        const elBtnReset = document.getElementById('btn-reset');
+        const elSpeedControls = document.getElementById('speed-controls');
+        
+        const elHmiActionPrompt = document.getElementById('hmi-action-prompt');
+        const elHmiActionInputs = document.getElementById('hmi-action-inputs');
+        const elManualPing = document.getElementById('manual-ping');
+        const elManualDot = document.getElementById('manual-dot');
+        const elPlcTerminal = document.getElementById('plc-terminal');
+        const elBtnClearTerminal = document.getElementById('btn-clear-terminal');
+
+        // SCADA Lines & SVGs indicators
+        const flowWater = document.getElementById('flow-water');
+        const flowCaustic = document.getElementById('flow-caustic');
+        const flowLas = document.getElementById('flow-las');
+        const flowLiquid20 = document.getElementById('flow-liquid20');
+        const flowSkybio = document.getElementById('flow-skybio');
+        const flowCirc = document.getElementById('circ-flow');
+
+        const indWater = document.getElementById('ind-water');
+        const indCaustic = document.getElementById('ind-caustic');
+        const indLas = document.getElementById('ind-las');
+        const indLiquid20 = document.getElementById('ind-liquid20');
+        const indSkybio = document.getElementById('ind-skybio');
+        const elPumpCircInd = document.getElementById('pump-circ-indicator');
+
+        // ----------------------------------------------------
+        // RESPONSIVE SCADA SCALING
+        // ----------------------------------------------------
+        function resizeSCADA() {
+            const container = document.getElementById('scada-container');
+            const diagram = document.getElementById('scada-diagram');
+            if (!container || !diagram) return;
+            
+            // Available space inside the container
+            const padding = 20; 
+            const availableWidth = container.clientWidth - padding;
+            const availableHeight = container.clientHeight - padding;
+            
+            // Base required dimension for the whole diagram (Labels + Tank + Pipes)
+            const baseWidth = 530; // 150 (Left margin/labels) + 180 (Tank) + 200 (Right Margin/Pump)
+            const baseHeight = 310; // 260 (Tank) + 50 (Margins top/bottom)
+            
+            // Calculate scale factor
+            const scaleX = availableWidth / baseWidth;
+            const scaleY = availableHeight / baseHeight;
+            const scale = Math.min(scaleX, scaleY, 1); // Never scale up beyond 100%
+            
+            diagram.style.transform = `scale(${scale})`;
+        }
+
+        // ----------------------------------------------------
+        // SYSTEM INITIALIZATION & EVENT HANDLERS
+        // ----------------------------------------------------
+        function init() {
+            lucide.createIcons();
+            updateRecipeCalculations();
+            updateClock();
+            setInterval(updateClock, 1000);
+            
+            // Handle Auto-scaling on load and resize
+            window.addEventListener('resize', resizeSCADA);
+            setTimeout(resizeSCADA, 100);
+            
+            // Event Listeners
+            elBatchSelector.addEventListener('change', (e) => {
+                // Strict Interlock: Block changes unless system is in completely idle ST_00 state
+                if (currentStep !== 'ST_00') {
+                    alert("ไม่สามารถเปลี่ยนขนาด Batch ระหว่างการผลิตได้ กรุณากด RESET เคลียร์ถังก่อนปรับเปลี่ยนสูตร");
+                    elBatchSelector.value = batchSize;
+                    return;
+                }
+                batchSize = parseInt(e.target.value);
+                updateRecipeCalculations();
+                logToTerminal(`[RECIPE] ปรับขนาดการผลิตเป็น ${batchSize.toLocaleString()} kg. คำนวณแผนวัตถุดิบและพารามิเตอร์เสร็จสมบูรณ์.`, 'blue');
+            });
+
+            elBtnStart.addEventListener('click', startSimulation);
+            elBtnPause.addEventListener('click', pauseSimulation);
+            elBtnReset.addEventListener('click', resetSimulation);
+            elBtnClearTerminal.addEventListener('click', () => { elPlcTerminal.innerHTML = `<div class="text-slate-500">// Terminal cleared by user.</div>`; });
+
+            // Speed multiplier selector
+            elSpeedControls.querySelectorAll('button').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    elSpeedControls.querySelectorAll('button').forEach(b => b.className = "px-2 py-1 rounded font-mono font-bold bg-slate-800 text-slate-300 hover:bg-slate-700");
+                    e.target.className = "px-2 py-1 rounded font-mono font-bold bg-cyan-600 text-white";
+                    simulationSpeed = parseInt(e.target.getAttribute('data-speed'));
+                    logToTerminal(`[SIMULATOR] ปรับความเร็วทดลองเป็น ${simulationSpeed} เท่า`, 'cyan');
+                });
+            });
+
+            // UI Initial State
+            updateStepDisplay();
+        }
+
+        function updateClock() {
+            const now = new Date();
+            elSystemTime.textContent = now.toLocaleTimeString('th-TH');
+        }
+
+        // Formula Calculation Scaling
+        function updateRecipeCalculations() {
+            targetWeights = {
+                water_total: batchSize * FORMULA_RATIOS.water_total,
+                water_wash: waterWashAllocation, // Fixed washing quota
+                water_main: (batchSize * FORMULA_RATIOS.water_total) - waterWashAllocation,
+                caustic: batchSize * FORMULA_RATIOS.caustic,
+                las: batchSize * FORMULA_RATIOS.las,
+                liquid_20: batchSize * FORMULA_RATIOS.liquid_20,
+                salt: batchSize * FORMULA_RATIOS.salt,
+                skybio: batchSize * FORMULA_RATIOS.skybio
+            };
+
+            // Update Tank Scale Text
+            elScale100.textContent = `${batchSize.toLocaleString()} kg`;
+            elScale80.textContent = `${(batchSize * 0.8).toLocaleString()} kg`;
+            elScale60.textContent = `${(batchSize * 0.6).toLocaleString()} kg`;
+            elScale40.textContent = `${(batchSize * 0.4).toLocaleString()} kg`;
+            elScale20.textContent = `${(batchSize * 0.2).toLocaleString()} kg`;
+
+            // Update DOM displays
+            elTargetWeightDisplay.textContent = batchSize.toLocaleString();
+            elRoMainDisplay.textContent = targetWeights.water_main.toFixed(2) + " kg";
+            elWashWaterDisplay.textContent = targetWeights.water_wash.toFixed(2) + " kg";
+            elCalcCaustic.textContent = targetWeights.caustic.toFixed(2) + " kg";
+            elCalcLas.textContent = targetWeights.las.toFixed(2) + " kg";
+            elCalcLiquid.textContent = targetWeights.liquid_20.toFixed(2) + " kg";
+            elCalcSalt.textContent = targetWeights.salt.toFixed(2) + " kg";
+            elCalcSkybio.textContent = targetWeights.skybio.toFixed(2) + " kg";
+        }
+
+        // Output logger to screen
+        function logToTerminal(message, color = 'gray') {
+            const timestamp = new Date().toLocaleTimeString('th-TH');
+            const logItem = document.createElement('div');
+            
+            let colorClass = 'text-slate-300';
+            if (color === 'blue') colorClass = 'text-blue-400';
+            if (color === 'purple') colorClass = 'text-purple-400';
+            if (color === 'cyan') colorClass = 'text-cyan-400';
+            if (color === 'emerald') colorClass = 'text-emerald-400 font-bold';
+            if (color === 'amber') colorClass = 'text-amber-400';
+            if (color === 'red') colorClass = 'text-red-400 font-bold';
+            if (color === 'gold') colorClass = 'text-yellow-300';
+
+            logItem.className = `leading-relaxed py-0.5 ${colorClass}`;
+            logItem.innerHTML = `<span class="text-slate-600">[${timestamp}]</span> ${message}`;
+            elPlcTerminal.appendChild(logItem);
+            elPlcTerminal.scrollTop = elPlcTerminal.scrollHeight;
+        }
+
+        // ----------------------------------------------------
+        // SIMULATOR RUNTIME LOOP
+        // ----------------------------------------------------
+        function startSimulation() {
+            if (isPaused) {
+                isPaused = false;
+                isRunning = true;
+                elBtnStart.disabled = true;
+                elBtnPause.disabled = false;
+                elBtnPause.innerHTML = `<i data-lucide="pause" class="w-4 h-4 sm:w-5 sm:h-5"></i><span class="text-[10px] sm:text-xs">PAUSE</span>`;
+                lucide.createIcons();
+                logToTerminal(`[SYSTEM] ระบบดำเนินการกระบวนการต่อ (Resume System)`, 'emerald');
+                updateAgitatorAnimation();
+                return;
+            }
+
+            if (isRunning) return;
+
+            isRunning = true;
+            elBtnStart.disabled = true;
+            elBtnPause.disabled = false;
+            
+            // Lock Batch selector visual states
+            elBatchSelector.disabled = true;
+            elSelectorLockIcon.classList.remove('hidden');
+            
+            logToTerminal(`[SYSTEM] เริ่มการทำงานระบบอัตโนมัติ สำหรับ Batch ${batchSize} kg`, 'emerald');
+            
+            // Go to first active step
+            changeStep('ST_01');
+
+            // Spawn the controller simulation loop (Runs 10 times a second for high fidelity)
+            systemLoopInterval = setInterval(plcCycleTick, 100);
+            updateAgitatorAnimation();
+        }
+
+        function pauseSimulation() {
+            if (!isRunning) return;
+            isPaused = true;
+            isRunning = false;
+            elBtnStart.disabled = false;
+            elBtnPause.innerHTML = `<i data-lucide="play" class="w-4 h-4 sm:w-5 sm:h-5"></i><span class="text-[10px] sm:text-xs">RESUME</span>`;
+            lucide.createIcons();
+            logToTerminal(`[SYSTEM] หยุดการผลิตชั่วคราว (System PAUSED)`, 'amber');
+            
+            // Turn off flow lines animations on pause
+            deactivateAllSCADALines();
+            updateAgitatorAnimation();
+        }
+
+        function resetSimulation() {
+            clearInterval(systemLoopInterval);
+            isRunning = false;
+            isPaused = false;
+            currentStep = 'ST_00';
+            currentWeight = 0;
+            currentLevel = 0;
+            waterInjectedForWash = 0;
+            elapsedSeconds = 0;
+            totalElapsedSeconds = 0;
+            flowRate = 0;
+            calculatedPH_1 = 6.2;
+            finalPHChecked = false;
+
+            elBtnStart.disabled = false;
+            elBtnPause.disabled = true;
+            elBtnPause.innerHTML = `<i data-lucide="pause" class="w-4 h-4 sm:w-5 sm:h-5"></i><span class="text-[10px] sm:text-xs">PAUSE</span>`;
+            
+            // Unlock batch selector
+            elBatchSelector.disabled = false;
+            elSelectorLockIcon.classList.add('hidden');
+            
+            lucide.createIcons();
+
+            deactivateAllSCADALines();
+            updateStepDisplay();
+            updateHMIActionPanel();
+            
+            // Reset Tank Animation
+            elTankLiquid.style.height = `0%`;
+            elTankWeight.textContent = "0.00";
+            elTankLevelPercent.textContent = "0%";
+            elFlowRate.textContent = "0.00 kg/s";
+
+            updateAgitatorAnimation();
+
+            logToTerminal(`[SYSTEM] รีเซ็ตระบบควบคุม PLC เรียบร้อย เข้าสู่โหมด Standby.`, 'slate-400');
+        }
+
+        // Main Clock cycle tick simulating PLC's cyclic execution
+        function plcCycleTick() {
+            if (!isRunning || isPaused) return;
+
+            // Define timing increment based on simulation speed (100ms * speed / 1000)
+            const timeIncrement = 0.1 * simulationSpeed;
+            totalElapsedSeconds += timeIncrement;
+            elapsedSeconds += timeIncrement;
+
+            const stepObj = STEPS[currentStep];
+            if (!stepObj) return;
+
+            // Step Logic State Machine
+            switch (stepObj.type) {
+                
+                case 'feed_water':
+                    // Active Water flow
+                    flowRate = 12.5 * simulationSpeed; // Faster flow for water
+                    currentWeight += (1.25 * simulationSpeed); // Increment weight
+                    
+                    animateSCADALines('water');
+
+                    if (currentWeight >= targetWeights.water_main) {
+                        currentWeight = targetWeights.water_main;
+                        logToTerminal(`[PLC] เติมน้ำ RO หลักครบตามสัดส่วนที่กำหนด (${currentWeight.toFixed(2)} kg)`, 'cyan');
+                        changeStep('ST_02');
+                    }
+                    break;
+
+                case 'agitator_start':
+                    // Just turn on agitator
+                    logToTerminal(`[PLC] ตรวจวัดความถี่ความเร็วรอบใบกวนถัง 5T-1 สำเร็จ [STABLE]`, 'emerald');
+                    changeStep('ST_03');
+                    break;
+
+                case 'feed_chem':
+                    // Feed chemical based on active step target
+                    const chemName = stepObj.ingredient;
+                    const targetChemWeight = targetWeights[chemName];
+                    const prevStepWeight = getAccumulativeWeightPriorTo(currentStep);
+                    const targetLimit = prevStepWeight + targetChemWeight;
+
+                    flowRate = 5.0 * simulationSpeed; // Chemical pumps are slower
+                    currentWeight += (0.5 * simulationSpeed);
+
+                    animateSCADALines(chemName);
+
+                    if (currentWeight >= targetLimit) {
+                        currentWeight = targetLimit;
+                        logToTerminal(`[PLC] เติมสารเคมี ${stepObj.name} ครบปริมาณ (${targetChemWeight.toFixed(2)} kg)`, 'purple');
+                        
+                        // Switch to wash step according to sheet pattern
+                        const nextStepMap = { 'ST_03': 'ST_04', 'ST_06': 'ST_07', 'ST_10': 'ST_11', 'ST_15': 'ST_16' };
+                        changeStep(nextStepMap[currentStep]);
+                    }
+                    break;
+
+                case 'wash':
+                    // Calculate Target explicitly
+                    const targetWashLimit = getAccumulativeWeightPriorTo(currentStep) + 20; 
+                    
+                    flowRate = 3.5 * simulationSpeed;
+                    const increment = 0.35 * simulationSpeed;
+                    currentWeight += increment;
+
+                    animateSCADALines('water');
+
+                    if (currentWeight >= targetWashLimit) {
+                        currentWeight = targetWashLimit;
+                        logToTerminal(`[PLC] ฉีดน้ำล้างท่อสารเสร็จสิ้น (น้ำล้าง 20kg)`, 'cyan');
+                        
+                        // Sequence mapping for Next Step
+                        const afterWashMap = { 'ST_04': 'ST_05', 'ST_07': 'ST_08', 'ST_11': 'ST_12', 'ST_14': 'ST_15' };
+                        changeStep(afterWashMap[currentStep]);
+                    }
+                    break;
+
+                case 'mix':
+                    // Static mixing over a duration
+                    flowRate = 0;
+                    animateSCADALines('mix');
+
+                    if (elapsedSeconds >= stepObj.duration) {
+                        logToTerminal(`[PLC] ขั้นตอนกวนผสมของ ${stepObj.name} สำเร็จ`, 'emerald');
+                        
+                        const afterMixMap = { 'ST_05': 'ST_06', 'ST_12': 'ST_13' };
+                        changeStep(afterMixMap[currentStep]);
+                    }
+                    break;
+
+                case 'mix_circulate':
+                    // Mix with recurrent pump cycle (Every 10 min, run pump for some time)
+                    // In simulation: Circulate pump P1 toggles on/off every 5s simulated
+                    flowRate = 0;
+                    const circInterval = 600; // 10 mins (600s)
+                    const isCircRunning = Math.floor(elapsedSeconds / circInterval) % 2 === 0;
+
+                    if (isCircRunning) {
+                        animateSCADALines('circulate');
+                    } else {
+                        animateSCADALines('mix');
+                    }
+
+                    if (elapsedSeconds >= stepObj.duration) {
+                        logToTerminal(`[PLC] สิ้นสุดเวลาปั่นส่วนผสมและล้างท่อรอบที่ 2`, 'emerald');
+                        changeStep('ST_09'); // Manual pH adjustment step
+                    }
+                    break;
+
+                case 'manual_ph_1':
+                    // Manual intervention hold
+                    flowRate = 0;
+                    isPaused = true; 
+                    deactivateAllSCADALines();
+                    logToTerminal(`[INTERLOCK] ล็อคระบบชั่วคราวเพื่อรอการยืนยัน pH ครั้งแรกจากผู้ใช้`, 'amber');
+                    updateHMIActionPanel();
+                    break;
+
+                case 'manual_salt':
+                    // Manual Salt dissolving step
+                    flowRate = 0;
+                    isPaused = true;
+                    deactivateAllSCADALines();
+                    logToTerminal(`[INTERLOCK] ล็อคระบบเพื่อรอโหลดของละลายน้ำเกลือ Refined Salt`, 'amber');
+                    updateHMIActionPanel();
+                    break;
+
+                case 'wash_final':
+                    // Final Wash hits the absolute batch size
+                    const finalTarget = batchSize; 
+                    
+                    flowRate = 3.5 * simulationSpeed;
+                    const finalWashIncrement = 0.35 * simulationSpeed;
+                    currentWeight += finalWashIncrement;
+
+                    animateSCADALines('water');
+
+                    if (currentWeight >= finalTarget) {
+                        currentWeight = finalTarget; // Clamp exact weight
+                        logToTerminal(`[PLC] ฉีดชะล้างน้ำสุดท้ายเสร็จสิ้น ครบสัดส่วน 100 kg`, 'cyan');
+                        changeStep('ST_17');
+                    }
+                    break;
+
+                case 'circulate_final':
+                    // End agitation + pump circulate before settling
+                    flowRate = 0;
+                    animateSCADALines('circulate');
+
+                    if (elapsedSeconds >= stepObj.duration) {
+                        logToTerminal(`[PLC] สิ้นสุดเวลาระบบหมุนเวียนปั่นรวมความเร็วปกติ`, 'emerald');
+                        changeStep('ST_18');
+                    }
+                    break;
+
+                case 'agitator_stop':
+                    // Turn off Agitator
+                    deactivateAllSCADALines();
+                    logToTerminal(`[PLC] ใบกวนกวนผสมหยุดลงเรียบร้อย ปลอดภัยดี`, 'emerald');
+                    changeStep('ST_19');
+                    break;
+
+                case 'mix_resting':
+                    // Resting state
+                    flowRate = 0;
+                    deactivateAllSCADALines();
+                    
+                    if (elapsedSeconds >= stepObj.duration) {
+                        logToTerminal(`[PLC] ครบรอบเวลาพักสมดุลสารเคมีเซ็ตตัว`, 'emerald');
+                        changeStep('ST_20');
+                    }
+                    break;
+
+                case 'manual_ph_2':
+                    // Final pH confirmation and QC Check
+                    flowRate = 0;
+                    isPaused = true;
+                    deactivateAllSCADALines();
+                    logToTerminal(`[INTERLOCK] รอพนักงานส่งตัวอย่างเข้า Lab และยืนยันคุณภาพผ่าน HMI`, 'amber');
+                    updateHMIActionPanel();
+                    break;
+
+                case 'complete':
+                    // Complete state reached
+                    flowRate = 0;
+                    clearInterval(systemLoopInterval);
+                    deactivateAllSCADALines();
+                    logToTerminal(`[CONGRATULATIONS] กระบวนการผสมเคมีสูตร CAPTAIN ปริมาณ ${batchSize} kg สมบูรณ์ 100%!`, 'emerald');
+                    break;
+            }
+
+            // Sync visual UI elements
+            updateTankDisplay();
+            updateStepDisplay();
+            updateAgitatorAnimation();
+        }
+
+        // ----------------------------------------------------
+        // SYSTEM CONTROLLERS AND ACTIONS
+        // ----------------------------------------------------
+        function changeStep(newStep) {
+            currentStep = newStep;
+            elapsedSeconds = 0;
+            
+            const stepObj = STEPS[currentStep];
+            
+            // Set Step Header Accent colors based on current task
+            let colorHex = '#475569'; // default slate
+            if (stepObj.type.includes('feed')) colorHex = '#a855f7'; // purple for feed
+            if (stepObj.type.includes('mix')) colorHex = '#10b981'; // emerald for mix
+            if (stepObj.type.includes('wash')) colorHex = '#0ea5e9'; // cyan for wash
+            if (stepObj.type.includes('manual')) colorHex = '#f59e0b'; // amber for manual
+            if (stepObj.type === 'complete') colorHex = '#10b981';
+
+            elStepBar.style.backgroundColor = colorHex;
+            elStepIdText.textContent = `PLC REGISTER STATE: ${stepObj.code}`;
+            elStepNameText.textContent = stepObj.name;
+            elStepDescriptionText.textContent = stepObj.desc;
+
+            logToTerminal(`[PLC TRANSITION] เปลี่ยนเป็นขั้นตอน [${stepObj.code}] ${stepObj.name}`, 'blue');
+            
+            // Re-render HMI Action Panel if manual interaction needed
+            updateHMIActionPanel();
+        }
+
+        // Cumulative weight tracking helper
+        function getAccumulativeWeightPriorTo(stepCode) {
+            const keys = Object.keys(STEPS);
+            let accumWeight = targetWeights.water_main; // Start with water
+
+            for (let i = 0; i < keys.length; i++) {
+                const k = keys[i];
+                if (k === stepCode) break;
+                
+                const step = STEPS[k];
+                if (step.type === 'feed_chem') {
+                    accumWeight += targetWeights[step.ingredient];
+                }
+                if (step.type === 'wash') {
+                    accumWeight += 20; // adding wash water quota sequentially
+                }
+                if (step.type === 'manual_salt') {
+                    accumWeight += targetWeights.salt;
+                }
+            }
+            return accumWeight;
+        }
+
+        // Synchronize Dynamic HMI confirmation buttons based on state
+        function updateHMIActionPanel() {
+            const stepObj = STEPS[currentStep];
+            elHmiActionInputs.innerHTML = '';
+
+            if (stepObj.type === 'manual_ph_1') {
+                elManualPing.classList.remove('hidden');
+                elManualDot.className = "relative inline-flex rounded-full h-2 w-2 bg-amber-500";
+                elHmiActionPrompt.innerHTML = `<span class="text-amber-400 font-bold">กรุณาปรับ pH:</span> ค่าน้ำยาปัจจุบันวัดได้ <span class="font-bold underline">${calculatedPH_1.toFixed(2)}</span> โปรดเลือกเครื่องเคมีเพื่อปรับให้ได้เสถียรภาพ 7.00`;
+
+                // Render Buttons for adjustment
+                const adjustAcidBtn = document.createElement('button');
+                adjustAcidBtn.className = "flex-1 sm:flex-none px-3 py-2 sm:py-1.5 bg-purple-700 hover:bg-purple-600 active:scale-95 text-white rounded text-[10px] sm:text-xs font-semibold flex items-center justify-center gap-1";
+                adjustAcidBtn.innerHTML = `<i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> เติม Caustic (+pH)`;
+                adjustAcidBtn.onclick = () => {
+                    calculatedPH_1 += 0.2;
+                    if (calculatedPH_1 > 7.1) calculatedPH_1 = 7.1;
+                    logToTerminal(`[HMI] เติมเคมี Caustic ปรับค่า pH ขึ้นมาเป็น ${calculatedPH_1.toFixed(2)}`, 'cyan');
+                    updateHMIActionPanel();
+                };
+
+                const adjustBaseBtn = document.createElement('button');
+                adjustBaseBtn.className = "flex-1 sm:flex-none px-3 py-2 sm:py-1.5 bg-indigo-700 hover:bg-indigo-600 active:scale-95 text-white rounded text-[10px] sm:text-xs font-semibold flex items-center justify-center gap-1";
+                adjustBaseBtn.innerHTML = `<i data-lucide="minus-circle" class="w-3.5 h-3.5"></i> เติม LAS (-pH)`;
+                adjustBaseBtn.onclick = () => {
+                    calculatedPH_1 -= 0.2;
+                    if (calculatedPH_1 < 6.8) calculatedPH_1 = 6.8;
+                    logToTerminal(`[HMI] เติมสาร LAS ปรับค่า pH ลงมาอยู่ที่ ${calculatedPH_1.toFixed(2)}`, 'cyan');
+                    updateHMIActionPanel();
+                };
+
+                const confirmBtn = document.createElement('button');
+                confirmBtn.className = "w-full sm:w-auto px-4 py-2 sm:py-1.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded text-[10px] sm:text-xs font-bold flex items-center justify-center gap-1 sm:ml-auto disabled:opacity-40 mt-2 sm:mt-0";
+                confirmBtn.innerHTML = `<i data-lucide="check-square" class="w-4 h-4"></i> คอนเฟิร์มค่า pH 7`;
+                // Only allow confirm if pH is between 6.9 and 7.1 (Standard tollerance)
+                const isAcceptable = Math.abs(calculatedPH_1 - 7.0) <= 0.15;
+                confirmBtn.disabled = !isAcceptable;
+                if (!isAcceptable) {
+                    confirmBtn.title = "กรุณาปรับ pH ให้ใกล้เคียง 7.00 ก่อนกดยืนยัน (ช่วงยอมรับได้: 6.90 - 7.10)";
+                }
+                confirmBtn.onclick = () => {
+                    calculatedPH_1 = 7.00;
+                    logToTerminal(`[HMI] พนักงานควบคุมกดยืนยันการปรับตั้ง pH รอบที่ 1 สมบูรณ์ที่ 7.00`, 'emerald');
+                    elManualPing.classList.add('hidden');
+                    elManualDot.className = "relative inline-flex rounded-full h-2 w-2 bg-slate-500";
+                    changeStep('ST_10');
+                    startSimulation();
+                };
+
+                // Create wrapper for adjust buttons to sit side-by-side on mobile
+                const adjustWrapper = document.createElement('div');
+                adjustWrapper.className = "flex gap-2 w-full sm:w-auto";
+                adjustWrapper.appendChild(adjustAcidBtn);
+                adjustWrapper.appendChild(adjustBaseBtn);
+
+                elHmiActionInputs.appendChild(adjustWrapper);
+                elHmiActionInputs.appendChild(confirmBtn);
+                elHmiActionInputs.classList.remove('hidden');
+
+            } else if (stepObj.type === 'manual_salt') {
+                elManualPing.classList.remove('hidden');
+                elManualDot.className = "relative inline-flex rounded-full h-2 w-2 bg-amber-500";
+                elHmiActionPrompt.innerHTML = `<span class="text-amber-400 font-bold">เตรียมเกลือละลายน้ำ:</span> นำเกลือ Refined Salt <span class="text-white font-bold">${targetWeights.salt.toFixed(2)} kg</span> ละลายน้ำถังแยกกวนจนหมด แล้วเทป้อนลงถังผสมหลัก จากนั้นกดปุ่มยืนยัน`;
+
+                const confirmSaltBtn = document.createElement('button');
+                confirmSaltBtn.className = "w-full py-2.5 sm:py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded text-[10px] sm:text-xs flex items-center justify-center gap-2";
+                confirmSaltBtn.innerHTML = `<i data-lucide="check" class="w-4 h-4"></i> ฉันละลายและเทป้อนสารเกลือเรียบร้อยแล้ว`;
+                confirmSaltBtn.onclick = () => {
+                    // Update weight adding salt mass
+                    currentWeight += targetWeights.salt;
+                    logToTerminal(`[HMI] พนักงานยืนยันการเพิ่มเกลือดิบละลายน้ำป้อนถังเรียบร้อย (${targetWeights.salt.toFixed(2)} kg)`, 'emerald');
+                    elManualPing.classList.add('hidden');
+                    elManualDot.className = "relative inline-flex rounded-full h-2 w-2 bg-slate-500";
+                    changeStep('ST_14');
+                    startSimulation();
+                };
+
+                elHmiActionInputs.appendChild(confirmSaltBtn);
+                elHmiActionInputs.classList.remove('hidden');
+
+            } else if (stepObj.type === 'manual_ph_2') {
+                elManualPing.classList.remove('hidden');
+                elManualDot.className = "relative inline-flex rounded-full h-2 w-2 bg-amber-500";
+                elHmiActionPrompt.innerHTML = `<span class="text-amber-400 font-bold">QC Check:</span> ตรวจวัดค่า pH น้ำยาก่อนส่งแล็บสรุปและปิด Batch น้ำยารอบสุดท้าย (เป้าหมาย 7.00)`;
+
+                const confirmQCBtn = document.createElement('button');
+                confirmQCBtn.className = "w-full py-2.5 sm:py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded text-[10px] sm:text-xs flex items-center justify-center gap-2";
+                confirmQCBtn.innerHTML = `<i data-lucide="award" class="w-4 h-4"></i> ยืนยันผลตรวจสอบ Lab ผ่านเกณฑ์ (pH 7.00)`;
+                confirmQCBtn.onclick = () => {
+                    logToTerminal(`[QC] ผลตรวจประเมินคุณภาพถัง 5T-1 เป็นที่พอใจ สั่งปล่อยล็อคสถานะสำเร็จ`, 'emerald');
+                    elManualPing.classList.add('hidden');
+                    elManualDot.className = "relative inline-flex rounded-full h-2 w-2 bg-slate-500";
+                    changeStep('ST_21');
+                    startSimulation();
+                };
+
+                elHmiActionInputs.appendChild(confirmQCBtn);
+                elHmiActionInputs.classList.remove('hidden');
+
+            } else {
+                // Default Standby
+                elManualPing.classList.add('hidden');
+                elManualDot.className = "relative inline-flex rounded-full h-2 w-2 bg-slate-500";
+                elHmiActionPrompt.textContent = "ไม่มีขั้นตอนที่ต้องสแตนด์บายจากผู้ปฏิบัติงานในขณะนี้...";
+                elHmiActionInputs.classList.add('hidden');
+            }
+
+            lucide.createIcons();
+        }
+
+        // Dynamic fluid calculations for tank graphic representation
+        function updateTankDisplay() {
+            // Level is represented by currentWeight over batchSize
+            currentLevel = (currentWeight / batchSize) * 100;
+            if (currentLevel > 100) currentLevel = 100;
+
+            elTankLiquid.style.height = `${currentLevel.toFixed(1)}%`;
+            elTankWeight.textContent = currentWeight.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            elTankLevelPercent.textContent = currentLevel.toFixed(1) + "%";
+            elFlowRate.textContent = flowRate.toFixed(2) + " kg/s";
+        }
+
+        // Progress bar and countdown state sync
+        function updateStepDisplay() {
+            const stepObj = STEPS[currentStep];
+            if (!stepObj) return;
+
+            // Timer display
+            if (stepObj.duration) {
+                const remaining = Math.max(0, stepObj.duration - elapsedSeconds);
+                const minutes = Math.floor(remaining / 60);
+                const seconds = Math.floor(remaining % 60);
+                elStepTimer.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                
+                // Progress percentage
+                const pct = (elapsedSeconds / stepObj.duration) * 100;
+                elStepProgress.style.width = `${Math.min(100, pct)}%`;
+            } else {
+                elStepTimer.textContent = "N/A";
+                // Show dynamic filling progress
+                if (stepObj.type === 'feed_water') {
+                    const pct = (currentWeight / targetWeights.water_main) * 100;
+                    elStepProgress.style.width = `${Math.min(100, pct)}%`;
+                } else if (stepObj.type === 'feed_chem') {
+                    const chemName = stepObj.ingredient;
+                    const targetChemWeight = targetWeights[chemName];
+                    const prevStepWeight = getAccumulativeWeightPriorTo(currentStep);
+                    const completedWeightInStep = currentWeight - prevStepWeight;
+                    const pct = (completedWeightInStep / targetChemWeight) * 100;
+                    elStepProgress.style.width = `${Math.min(100, pct)}%`;
+                } else if (stepObj.type === 'wash' || stepObj.type === 'wash_final') {
+                    const targetWashWeight = stepObj.type === 'wash' ? 20 : (batchSize - getAccumulativeWeightPriorTo('ST_16'));
+                    const prevStepWeight = getAccumulativeWeightPriorTo(currentStep);
+                    const completedWeightInStep = currentWeight - prevStepWeight;
+                    const pct = (completedWeightInStep / targetWashWeight) * 100;
+                    elStepProgress.style.width = `${Math.min(100, Math.max(0, pct))}%`;
+                } else {
+                    elStepProgress.style.width = "100%";
+                }
+            }
+        }
+
+        // ----------------------------------------------------
+        // SCADA ANIMATIONS AND PIPING GRAPHICS CONTROLLERS
+        // ----------------------------------------------------
+        function updateAgitatorAnimation() {
+            const stepNum = parseInt(currentStep.split('_')[1]);
+            
+            // ใบกวนทำงานตั้งแต่ ST_02 ถึง ST_17 และหยุดเมื่อถูก Pause
+            const shouldBeSpinning = stepNum >= 2 && stepNum < 18 && !isPaused;
+
+            if (!shouldBeSpinning) {
+                elTankPropeller.className = "w-24 h-5 bg-gradient-to-r from-slate-400 via-slate-100 to-slate-400 rounded-full flex items-center justify-between px-1 shadow border border-slate-500";
+                elAgitatorParticles.classList.add('hidden');
+                return;
+            }
+
+            // ตั้งแต่ ST_10 (เติม LIQUID 20) เป็นต้นไป ให้ใบกวนหมุนเร็ว
+            const isFast = stepNum >= 10;
+            const spinClass = isFast ? 'spinning-fast' : 'spinning';
+            
+            elTankPropeller.className = `w-24 h-5 bg-gradient-to-r from-slate-400 via-slate-100 to-slate-400 rounded-full flex items-center justify-between px-1 shadow border border-slate-500 ${spinClass}`;
+            elAgitatorParticles.classList.remove('hidden');
+        }
+
+        function animateSCADALines(actionType) {
+            deactivateAllSCADALines();
+
+            if (actionType === 'water') {
+                flowWater.classList.remove('hidden');
+                indWater.className = "w-3 h-3 rounded-full bg-cyan-500 border border-cyan-400 animate-pulse shadow-[0_0_8px_#06b6d4] shrink-0";
+            } else if (actionType === 'caustic') {
+                flowCaustic.classList.remove('hidden');
+                indCaustic.className = "w-3 h-3 rounded-full bg-purple-500 border border-purple-400 animate-pulse shadow-[0_0_8px_#a855f7] shrink-0";
+            } else if (actionType === 'las') {
+                flowLas.classList.remove('hidden');
+                indLas.className = "w-3 h-3 rounded-full bg-yellow-500 border border-yellow-400 animate-pulse shadow-[0_0_8px_#eab308] shrink-0";
+            } else if (actionType === 'liquid_20') {
+                flowLiquid20.classList.remove('hidden');
+                indLiquid20.className = "w-3 h-3 rounded-full bg-pink-500 border border-pink-400 animate-pulse shadow-[0_0_8px_#ec4899] shrink-0";
+            } else if (actionType === 'skybio') {
+                flowSkybio.classList.remove('hidden');
+                indSkybio.className = "w-3 h-3 rounded-full bg-emerald-500 border border-emerald-400 animate-pulse shadow-[0_0_8px_#10b981] shrink-0";
+            } else if (actionType === 'circulate') {
+                flowCirc.classList.remove('hidden');
+                document.getElementById('circ-flow-glow')?.classList.remove('hidden');
+                elPumpCircInd.className = "w-4 h-4 rounded-full bg-emerald-500 border-2 border-emerald-400 animate-pulse shadow-[0_0_10px_#10b981] shrink-0";
+            } else if (actionType === 'mix') {
+                // Just Agitator active (handled globally by updateAgitatorAnimation)
+            }
+        }
+
+        function deactivateAllSCADALines() {
+            flowWater.classList.add('hidden');
+            flowCaustic.classList.add('hidden');
+            flowLas.classList.add('hidden');
+            flowLiquid20.classList.add('hidden');
+            flowSkybio.classList.add('hidden');
+            flowCirc.classList.add('hidden');
+            document.getElementById('circ-flow-glow')?.classList.add('hidden');
+            
+            const offClass = "w-3 h-3 rounded-full bg-slate-800 border border-slate-700 shrink-0";
+            indWater.className = offClass;
+            indCaustic.className = offClass;
+            indLas.className = offClass;
+            indLiquid20.className = offClass;
+            indSkybio.className = offClass;
+            elPumpCircInd.className = "w-4 h-4 rounded-full bg-slate-800 border-2 border-slate-600 shrink-0";
+        }
+
+        // Initialize App on window load
+        window.onload = function() {
+            init();
+        };
+    </script>
+</body>
+</html>

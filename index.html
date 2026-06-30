@@ -4513,10 +4513,20 @@
             if (!ctx) return;
             if (ovChartInstance) { ovChartInstance.destroy(); ovChartInstance = null; }
 
+            const OV_RECEIVED_COLORS = [
+                '#10b981', // เขียว Emerald (สำหรับได้รับจริง - ตัดกับเส้นตามสั่งที่เป็นสีคราม)
+                '#ef4444', // แดง (ตัดกับเส้นตามสั่งที่เป็นสีส้ม)
+                '#2563eb', // น้ำเงินเข้ม (ตัดกับเส้นตามสั่งที่เป็นสีเขียว)
+                '#06b6d4', // ฟ้าอมเขียว
+                '#db2777', // ชมพูเข้ม
+                '#d97706', // ส้มเข้ม
+            ];
+
             const labels = months.map(m => OV_MONTH_NAMES[m]);
             const datasets = [];
             years.forEach((y, i) => {
                 const color = OV_COLORS[i % OV_COLORS.length];
+                const rxColor = OV_RECEIVED_COLORS[i % OV_RECEIVED_COLORS.length];
                 
                 // 1. มูลค่าตามสั่งซื้อ - เส้นทึบ
                 datasets.push({
@@ -4536,11 +4546,11 @@
                 datasets.push({
                     label: `${y} (ได้รับจริง)`,
                     data: months.map(m => yearData[y].byMonth[m]?.receivedValue || 0),
-                    borderColor: color.border,
+                    borderColor: rxColor,
                     backgroundColor: 'transparent',
                     borderWidth: 2,
                     borderDash: [5, 5],
-                    pointBackgroundColor: color.border,
+                    pointBackgroundColor: rxColor,
                     pointRadius: 3,
                     pointHoverRadius: 6,
                     tension: 0.4,

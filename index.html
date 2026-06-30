@@ -1167,6 +1167,31 @@
         </div>
     </div>
 
+    <!-- Edit Dates Modal -->
+    <div id="editDatesModal" class="fixed inset-0 bg-black/50 z-[55] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+            <div class="p-4 md:p-5 border-b border-gray-200 flex justify-between items-center shrink-0">
+                <h3 class="text-lg md:text-xl font-bold text-gray-800">แก้ไขวันที่คำสั่งซื้อ</h3>
+                <button onclick="closeEditDatesModal()" class="text-gray-400 hover:text-gray-700 px-2 text-xl"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-4 md:p-5 overflow-y-auto flex-1 no-scrollbar space-y-4">
+                <input type="hidden" id="edit-date-id">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">วันที่ลงข้อมูล *</label>
+                    <input type="date" id="edit-date-input" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">วันที่ได้รับ</label>
+                    <input type="date" id="edit-date-receive" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+            </div>
+            <div class="p-4 md:p-5 border-t border-gray-200 flex justify-end gap-3 shrink-0">
+                <button type="button" onclick="closeEditDatesModal()" class="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium">ยกเลิก</button>
+                <button type="button" onclick="saveEditDates()" id="btn-save-edit-dates" class="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm font-medium">บันทึกข้อมูล</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Receive Modal -->
     <div id="receiveModal" class="fixed inset-0 bg-black/50 z-[55] hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
@@ -1370,6 +1395,7 @@
                 // อัปเดตรายชื่อ Supplier และ ตารางจัดการคำสั่งซื้อ
                 if(window.updateOrdersSupplierDropdown) window.updateOrdersSupplierDropdown();
                 if(window.renderOrdersTable) window.renderOrdersTable(document.getElementById('orders-search')?.value || '');
+                if(window.renderOverview) window.renderOverview();
             }, (error) => {
                 console.error("Error fetching data:", error);
                 statusEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ข้อผิดพลาดสิทธิ์การเข้าถึง';
@@ -1659,8 +1685,80 @@
 
                 try {
                     const orderDate = document.getElementById('upd-date').value || (item ? item.dateInput : new Date().toISOString().split('T')[0]);
+                    const newPR = document.getElementById('upd-prNumber').value.trim();
+                    const newPO = document.getElementById('upd-poNumber').value.trim();
+                    const oldPR = item.prNumber || '-';
+                    const oldPO = item.poNumber || '-';
+
+                    // ค้นหารายการสั่งซื้ออื่นๆ ที่เกี่ยวข้องเพื่ออัปเดตแบบกลุ่ม (Batch)
+                    const otherUpdates = [];
+                    window.allOrdersData.forEach(o => {
+                        if (o.id === id) return;
+                        
+                        let needsUpdate = false;
+                        const updateObj = {};
+                        
+                        const oPR = o.prNumber || '-';
+                        const oPO = o.poNumber || '-';
+                        
+                        // เคส A: แก้ไขรหัส PR เดิม หรือเชื่อมโยง PO
+                        if (oldPR !== '-' && oldPR !== '' && oPR === oldPR) {
+                            if (newPR !== oPR) {
+                                updateObj.prNumber = newPR;
+                                needsUpdate = true;
+                            }
+                            if (newPO !== oPO && newPO !== '-' && newPO !== '') {
+                                updateObj.poNumber = newPO;
+                                needsUpdate = true;
+                            }
+                        }
+                        
+                        // เคส B: แก้ไขรหัส PO เดิม หรือเชื่อมโยง PR
+                        if (oldPO !== '-' && oldPO !== '' && oPO === oldPO) {
+                            if (newPO !== oPO) {
+                                updateObj.poNumber = newPO;
+                                needsUpdate = true;
+                            }
+                            if (newPR !== oPR && newPR !== '-' && newPR !== '') {
+                                updateObj.prNumber = newPR;
+                                needsUpdate = true;
+                            }
+                        }
+                        
+                        // เคส C: เชื่อมโยง PO ใหม่กับ PR เดียวกัน
+                        if (newPR !== '-' && newPR !== '' && oPR === newPR) {
+                            if (newPO !== oPO && newPO !== '-' && newPO !== '') {
+                                updateObj.poNumber = newPO;
+                                needsUpdate = true;
+                            }
+                        }
+                        
+                        // เคส D: เชื่อมโยง PR ใหม่กับ PO เดียวกัน
+                        if (newPO !== '-' && newPO !== '' && oPO === newPO) {
+                            if (newPR !== oPR && newPR !== '-' && newPR !== '') {
+                                updateObj.prNumber = newPR;
+                                needsUpdate = true;
+                            }
+                        }
+
+                        // อัปเดตวันที่ลงข้อมูลสำหรับรายการที่ใช้ PR หรือ PO เดียวกัน
+                        const sharesPR = (oldPR !== '-' && oldPR !== '' && oPR === oldPR) || (newPR !== '-' && newPR !== '' && oPR === newPR);
+                        const sharesPO = (oldPO !== '-' && oldPO !== '' && oPO === oldPO) || (newPO !== '-' && newPO !== '' && oPO === newPO);
+                        if (sharesPR || sharesPO) {
+                            if (orderDate !== o.dateInput) {
+                                updateObj.dateInput = orderDate;
+                                needsUpdate = true;
+                            }
+                        }
+                        
+                        if (needsUpdate) {
+                            otherUpdates.push({ id: o.id, ...updateObj });
+                        }
+                    });
+
+                    const batch = writeBatch(db);
                     const docRef = doc(db, 'artifacts', 'order-record-814a1', 'public', 'data', 'orders', id);
-                    await updateDoc(docRef, {
+                    batch.update(docRef, {
                         status: document.getElementById('upd-status').value,
                         qty: qty,
                         dateInput: orderDate,
@@ -1669,9 +1767,20 @@
                         unit: updUnit,
                         unitPrice: unitPrice,
                         totalPrice: qty * unitPrice,
-                        prNumber: document.getElementById('upd-prNumber').value.trim(),
-                        poNumber: document.getElementById('upd-poNumber').value.trim()
+                        prNumber: newPR,
+                        poNumber: newPO
                     });
+
+                    otherUpdates.forEach(u => {
+                        const otherRef = doc(db, 'artifacts', 'order-record-814a1', 'public', 'data', 'orders', u.id);
+                        const fieldsToUpdate = {};
+                        if (u.prNumber !== undefined) fieldsToUpdate.prNumber = u.prNumber;
+                        if (u.poNumber !== undefined) fieldsToUpdate.poNumber = u.poNumber;
+                        if (u.dateInput !== undefined) fieldsToUpdate.dateInput = u.dateInput;
+                        batch.update(otherRef, fieldsToUpdate);
+                    });
+
+                    await batch.commit();
 
                     const productCode = item.productCode;
                     if (productCode) {
@@ -1961,6 +2070,83 @@
                 };
                 
                 reader.readAsText(file, 'UTF-8');
+            };
+
+            window.openEditDates = function(id) {
+                const item = window.allOrdersData.find(x => x.id === id);
+                if(!item) return;
+
+                document.getElementById('edit-date-id').value = id;
+                document.getElementById('edit-date-input').value = item.dateInput || '';
+                document.getElementById('edit-date-receive').value = item.receiveDate || '';
+
+                document.getElementById('editDatesModal').classList.remove('hidden');
+            };
+
+            window.closeEditDatesModal = function() {
+                document.getElementById('editDatesModal').classList.add('hidden');
+            };
+
+            window.saveEditDates = async function() {
+                const id = document.getElementById('edit-date-id').value;
+                if(!id) return;
+
+                const btn = document.getElementById('btn-save-edit-dates');
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> บันทึก...';
+                btn.disabled = true;
+
+                const item = window.allOrdersData.find(x => x.id === id);
+                const dateInputVal = document.getElementById('edit-date-input').value;
+                const receiveDateVal = document.getElementById('edit-date-receive').value;
+
+                try {
+                    const pr = item ? (item.prNumber || '-') : '-';
+                    const po = item ? (item.poNumber || '-') : '-';
+
+                    // ค้นหารายการสั่งซื้ออื่นๆ ที่ใช้ PR หรือ PO เดียวกัน
+                    const otherUpdates = [];
+                    window.allOrdersData.forEach(o => {
+                        if (o.id === id) return;
+                        
+                        let needsUpdate = false;
+                        const oPR = o.prNumber || '-';
+                        const oPO = o.poNumber || '-';
+                        
+                        if ((pr !== '-' && pr !== '' && oPR === pr) || (po !== '-' && po !== '' && oPO === po)) {
+                            needsUpdate = true;
+                        }
+                        
+                        if (needsUpdate) {
+                            otherUpdates.push(o.id);
+                        }
+                    });
+
+                    const batch = writeBatch(db);
+                    const docRef = doc(db, 'artifacts', 'order-record-814a1', 'public', 'data', 'orders', id);
+                    batch.update(docRef, {
+                        dateInput: dateInputVal,
+                        receiveDate: receiveDateVal
+                    });
+
+                    otherUpdates.forEach(otherId => {
+                        const otherRef = doc(db, 'artifacts', 'order-record-814a1', 'public', 'data', 'orders', otherId);
+                        batch.update(otherRef, {
+                            dateInput: dateInputVal,
+                            receiveDate: receiveDateVal
+                        });
+                    });
+
+                    await batch.commit();
+                    window.showCustomAlert('อัปเดตวันที่สำเร็จสำหรับทุกรายการในกลุ่ม', 'success');
+                    window.closeEditDatesModal();
+                } catch(e) {
+                    console.error("Error updating dates:", e);
+                    window.showCustomAlert('เกิดข้อผิดพลาดในการบันทึกข้อมูล', 'error');
+                } finally {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
             };
 
         }).catch((error) => {
@@ -4906,6 +5092,16 @@
                     </div>`;
                 }
 
+                let editBtnHtml = '';
+                if (window.isAdminLoggedIn) {
+                    editBtnHtml = `
+                    <div class="md:col-span-3 border-t border-gray-100 pt-3 mt-1 flex justify-end">
+                        <button onclick="event.stopPropagation(); openEditDates('${item.id}')" class="bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors text-xs font-medium flex items-center gap-1">
+                            <i class="fas fa-calendar-alt"></i> แก้ไขวันที่
+                        </button>
+                    </div>`;
+                }
+
                 const detailTr = document.createElement('tr');
                 detailTr.id = `detail-${realIndex}`;
                 detailTr.className = 'hidden bg-slate-50 border-b border-gray-200';
@@ -4925,6 +5121,7 @@
                                 <p><span class="text-gray-500">PO Number:</span> <span class="font-medium">${item.poNumber || '-'}</span></p>
                             </div>
                             ${receiveHistoryHtml}
+                            ${editBtnHtml}
                         </div>
                     </td>
                 `;

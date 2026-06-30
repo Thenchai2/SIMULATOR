@@ -2161,8 +2161,22 @@
 
     <!-- UI Logic Scripts -->
     <script>
-        window.isAdminLoggedIn = false;
+        window.isAdminLoggedIn = localStorage.getItem('isAdminLoggedIn') === 'true';
         window.intendedTab = null;
+
+        window.syncAdminUI = function() {
+            if (window.isAdminLoggedIn) {
+                document.getElementById('logout-container')?.classList.remove('hidden');
+                document.getElementById('login-container')?.classList.add('hidden');
+                document.querySelectorAll('.admin-menu').forEach(el => el.classList.remove('hidden'));
+            } else {
+                document.getElementById('logout-container')?.classList.add('hidden');
+                document.getElementById('login-container')?.classList.remove('hidden');
+                document.querySelectorAll('.admin-menu').forEach(el => el.classList.add('hidden'));
+            }
+        };
+        // Run immediately to restore session state if active
+        window.syncAdminUI();
 
         window.openLoginModal = function() {
             document.getElementById('login-username').value = '';
@@ -2266,10 +2280,15 @@
 
         window.logoutAdmin = function() {
             window.isAdminLoggedIn = false;
-            document.getElementById('logout-container').classList.add('hidden');
-            document.getElementById('login-container').classList.remove('hidden');
-            document.querySelectorAll('.admin-menu').forEach(el => el.classList.add('hidden'));
+            localStorage.removeItem('isAdminLoggedIn');
+            window.syncAdminUI();
             switchTab('dashboard');
+            
+            // Re-render tables to update admin-specific views/buttons
+            if(window.applyFilters) window.applyFilters();
+            if(window.renderManageTable) window.renderManageTable();
+            if(window.renderOrdersTable) window.renderOrdersTable(document.getElementById('orders-search')?.value || '');
+            
             window.showCustomAlert('ออกจากระบบเรียบร้อยแล้ว', 'success');
         }
 
@@ -2279,11 +2298,15 @@
 
             if (user === 'admin' && pass === '0031') {
                 window.isAdminLoggedIn = true;
+                localStorage.setItem('isAdminLoggedIn', 'true');
                 closeLoginModal();
-                document.getElementById('logout-container').classList.remove('hidden');
-                document.getElementById('login-container').classList.add('hidden');
-                document.querySelectorAll('.admin-menu').forEach(el => el.classList.remove('hidden'));
+                window.syncAdminUI();
                 if (window.intendedTab) switchTab(window.intendedTab);
+                
+                // Re-render tables to update admin-specific views/buttons
+                if(window.applyFilters) window.applyFilters();
+                if(window.renderManageTable) window.renderManageTable();
+                if(window.renderOrdersTable) window.renderOrdersTable(document.getElementById('orders-search')?.value || '');
             } else {
                 document.getElementById('login-error').classList.remove('hidden');
             }

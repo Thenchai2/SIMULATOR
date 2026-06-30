@@ -7,6 +7,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/th.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
         body { font-family: 'Sarabun', sans-serif; }
@@ -45,6 +48,7 @@
                 overflow: visible !important;
             }
         }
+        .flatpickr-calendar { font-family: 'Sarabun', sans-serif !important; }
     </style>
 </head>
 <body class="bg-gray-100 flex h-screen overflow-hidden">
@@ -544,17 +548,15 @@
                 <div id="ana-filter-start-container">
                     <label class="block text-sm font-medium text-gray-700 mb-1">ตั้งแต่วันที่</label>
                     <div class="relative">
-                        <input type="text" id="analysis-start-date" inputmode="numeric" maxlength="10" placeholder="วว/ดด/ปปปป" class="w-full border border-gray-300 rounded-lg p-2.5 pr-10 focus:ring-2 focus:ring-blue-500 outline-none">
-                        <button type="button" onclick="document.getElementById('ana-start-picker').showPicker ? document.getElementById('ana-start-picker').showPicker() : document.getElementById('ana-start-picker').click()" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-500 transition-colors" title="เปิดปฏิทิน"><i class="fas fa-calendar-alt"></i></button>
-                        <input type="date" id="ana-start-picker" class="absolute opacity-0 w-0 h-0 top-0 right-0" tabindex="-1" onchange="syncDatePicker('ana-start-picker','analysis-start-date')">
+                        <input type="text" id="analysis-start-date" placeholder="วว/ดด/ปปปป" class="w-full border border-gray-300 rounded-lg p-2.5 pr-10 focus:ring-2 focus:ring-blue-500 outline-none bg-white cursor-pointer">
+                        <button type="button" onclick="const fp = document.getElementById('analysis-start-date')._flatpickr; if(fp) fp.open();" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-500 transition-colors" title="เปิดปฏิทิน"><i class="fas fa-calendar-alt"></i></button>
                     </div>
                 </div>
                 <div id="ana-filter-end-container">
                     <label class="block text-sm font-medium text-gray-700 mb-1">ถึงวันที่</label>
                     <div class="relative">
-                        <input type="text" id="analysis-end-date" inputmode="numeric" maxlength="10" placeholder="วว/ดด/ปปปป" class="w-full border border-gray-300 rounded-lg p-2.5 pr-10 focus:ring-2 focus:ring-blue-500 outline-none">
-                        <button type="button" onclick="document.getElementById('ana-end-picker').showPicker ? document.getElementById('ana-end-picker').showPicker() : document.getElementById('ana-end-picker').click()" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-500 transition-colors" title="เปิดปฏิทิน"><i class="fas fa-calendar-alt"></i></button>
-                        <input type="date" id="ana-end-picker" class="absolute opacity-0 w-0 h-0 top-0 right-0" tabindex="-1" onchange="syncDatePicker('ana-end-picker','analysis-end-date')">
+                        <input type="text" id="analysis-end-date" placeholder="วว/ดด/ปปปป" class="w-full border border-gray-300 rounded-lg p-2.5 pr-10 focus:ring-2 focus:ring-blue-500 outline-none bg-white cursor-pointer">
+                        <button type="button" onclick="const fp = document.getElementById('analysis-end-date')._flatpickr; if(fp) fp.open();" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-500 transition-colors" title="เปิดปฏิทิน"><i class="fas fa-calendar-alt"></i></button>
                     </div>
                 </div>
                 <div class="hidden" id="ana-filter-year1-container">
@@ -1396,6 +1398,7 @@
                 if(window.updateOrdersSupplierDropdown) window.updateOrdersSupplierDropdown();
                 if(window.renderOrdersTable) window.renderOrdersTable(document.getElementById('orders-search')?.value || '');
                 if(window.renderOverview) window.renderOverview();
+                if(window.renderReceiveTable) window.renderReceiveTable();
             }, (error) => {
                 console.error("Error fetching data:", error);
                 statusEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ข้อผิดพลาดสิทธิ์การเข้าถึง';
@@ -5165,6 +5168,74 @@
             }
         });
         if (window.innerWidth < 768) { document.getElementById('sidebar').classList.add('-translate-x-full'); }
+
+        // --- Flatpickr Initialization for Uniform Thai Date Format (DD/MM/YYYY) ---
+        function initFlatpickr() {
+            // Overriding value setter for HTMLInputElement so that programmatically setting .value updates Flatpickr altInput
+            const origValDescriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+            let isSettingDate = false;
+            Object.defineProperty(HTMLInputElement.prototype, 'value', {
+                get: function() {
+                    return origValDescriptor.get.call(this);
+                },
+                set: function(val) {
+                    const oldVal = origValDescriptor.get.call(this);
+                    origValDescriptor.set.call(this, val);
+                    if (this._flatpickr && oldVal !== val && !isSettingDate) {
+                        isSettingDate = true;
+                        try {
+                            const fpDate = this._flatpickr.input.value; 
+                            if (fpDate !== val) {
+                                this._flatpickr.setDate(val, false);
+                            }
+                        } catch(e) {
+                            console.error(e);
+                        } finally {
+                            isSettingDate = false;
+                        }
+                    }
+                },
+                configurable: true
+            });
+
+            const fpCommonOptions = {
+                locale: "th",
+                dateFormat: "Y-m-d",
+                altInput: true,
+                altFormat: "d/m/Y",
+                altInputClass: "w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white cursor-pointer",
+                allowInput: true
+            };
+
+            // Initialize on all native date inputs
+            document.querySelectorAll('input[type="date"]').forEach(el => {
+                flatpickr(el, fpCommonOptions);
+            });
+
+            // Initialize on Analysis start and end dates directly
+            const anaStart = document.getElementById('analysis-start-date');
+            if (anaStart) {
+                flatpickr(anaStart, {
+                    locale: "th",
+                    dateFormat: "d/m/Y",
+                    allowInput: true
+                });
+            }
+            const anaEnd = document.getElementById('analysis-end-date');
+            if (anaEnd) {
+                flatpickr(anaEnd, {
+                    locale: "th",
+                    dateFormat: "d/m/Y",
+                    allowInput: true
+                });
+            }
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initFlatpickr);
+        } else {
+            initFlatpickr();
+        }
 
     </script>
 </body>
